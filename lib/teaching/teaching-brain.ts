@@ -31,42 +31,52 @@ export class TeachingBrain {
     let encouragement = "";
 
     // 1. Evaluate correctness
+    const selected = question?.type === "MCQ" && question.options
+      ? question.options.find((o) => o.id === response.selectedOptionId)
+      : undefined;
+
     if (question?.type === "MCQ" && question.options) {
-      const selected = question.options.find((o) => o.id === response.selectedOptionId);
       isCorrect = Boolean(selected?.isCorrect);
       score = isCorrect ? 100 : 25;
       if (isCorrect) {
-        feedback = `Spot on! ${question.correctAnswerSummary}`;
-        encouragement = "Excellent physical intuition. You grasped the direct proportionality.";
+        feedback = `Spot on! ${question.correctAnswerSummary || "You got the core principle right."}`;
+        encouragement = "Excellent reasoning! You grasped the foundational concept.";
       } else {
-        feedback = `Not quite. ${question.correctAnswerSummary}`;
-        encouragement = "Let's break down this relationship together. Physics is about understanding patterns, not memorizing.";
+        feedback = `Not quite. ${question.correctAnswerSummary || "Let's review this concept together."}`;
+        encouragement = "Let's break down this relationship together. Learning happens when we address the tricky parts.";
       }
     } else {
       // Free text / Explain in own words
       const text = response.studentAnswer.toLowerCase();
+      const expectedSummary = (question?.correctAnswerSummary || "").toLowerCase();
+      const keywords = expectedSummary.split(/\W+/).filter((w) => w.length > 3);
+      const matches = keywords.filter((k) => text.includes(k));
+      const hasKeywords = keywords.length > 0 && matches.length >= Math.min(2, Math.ceil(keywords.length * 0.25));
+
       if (
-        (text.includes("oppose") || text.includes("resist") || text.includes("reduce") || text.includes("decrease") || text.includes("less") || text.includes("dim")) &&
-        !text.includes("increase current")
+        (hasKeywords || (text.length > 15 && !text.includes("don't know") && !text.includes("not sure") && !text.includes("no idea"))) &&
+        !text.includes("wrong")
       ) {
         isCorrect = true;
-        score = 90;
-        feedback = "Outstanding explanation! You correctly identified that higher resistance restricts current flow, resulting in reduced power and brightness.";
-        encouragement = "Your reasoning is rock solid!";
+        score = 88;
+        feedback = `Great explanation! You accurately articulated the core principle: ${question?.correctAnswerSummary || "Well reasoned."}`;
+        encouragement = "Your conceptual intuition is rock solid!";
       } else {
         isCorrect = false;
-        score = 40;
-        feedback = "Notice that resistance acts as a constriction. When resistance goes up, current decreases, which causes the bulb to dim.";
-        encouragement = "Great attempt! Connecting microscopic resistance to visible lightbulb brightness is a big step.";
+        score = 45;
+        feedback = `Notice how this relates to the key mechanism: ${question?.correctAnswerSummary || "Keep thinking through the core cause and effect."}`;
+        encouragement = "Great attempt! Formulating ideas in your own words is how deep mastery develops.";
       }
     }
 
     // 2. Misconception Engine
     const misconceptionAnalysis = MisconceptionDetector.detect({
       questionId: response.questionId,
-      conceptTitle: question?.conceptTitle || "Physics Dynamics",
+      conceptTitle: question?.conceptTitle || currentStep?.title || "Core Concept",
       studentAnswer: response.studentAnswer,
       selectedOptionId: response.selectedOptionId,
+      misconceptionTrigger: selected?.misconceptionTrigger,
+      lessonContext: currentStep?.narration,
     });
 
     // 3. Confidence & Stability Model

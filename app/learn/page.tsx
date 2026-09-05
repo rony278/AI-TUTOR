@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -34,16 +34,11 @@ export default function CreateLessonPage() {
   // Mode: Topic vs Material
   const [activeTab, setActiveTab] = useState<"topic" | "material">("topic");
 
-  // Topic input
-  const [topicInput, setTopicInput] = useState("Teach me Newton's Laws and Electrical Circuits from the beginning");
+  // Topic input (defaults to empty so user enters any topic)
+  const [topicInput, setTopicInput] = useState("");
 
   // Material Upload State
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; size: string; type: string; pages: number } | null>({
-    name: "Physics_Chapter_4_Dynamics_and_Circuits.pdf",
-    size: "4.2 MB",
-    type: "PDF",
-    pages: 42,
-  });
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; size: string; type: string; pages: number } | null>(null);
   const [pastedText, setPastedText] = useState("");
   const [usePastedText, setUsePastedText] = useState(false);
 
@@ -57,6 +52,24 @@ export default function CreateLessonPage() {
   const [style, setStyle] = useState<TeachingStyle>("Visual");
   const [time, setTime] = useState<LessonDuration>("20m");
   const [depth, setDepth] = useState<LessonDepth>("Balanced");
+
+  // Optional in-browser Gemini API Key configuration
+  const [apiKey, setApiKey] = useState("");
+  const [showKeyInput, setShowKeyInput] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("gemini_api_key") || "";
+      if (saved) setApiKey(saved);
+    }
+  }, []);
+
+  const handleKeySave = (val: string) => {
+    setApiKey(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gemini_api_key", val.trim());
+    }
+  };
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -93,14 +106,24 @@ export default function CreateLessonPage() {
       await new Promise((r) => setTimeout(r, 450));
     }
 
-    // Call create API
+    const chosenTopic = activeTab === "topic"
+      ? (topicInput.trim() || "Artificial Intelligence & Neural Networks")
+      : (uploadedFile?.name || "Uploaded Course Document");
+
+    // Call create API with dynamic topic and API key
+    let targetLessonId = `lesson_${Date.now()}`;
     try {
-      await fetch("/api/lesson/create", {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (apiKey.trim()) {
+        headers["x-gemini-key"] = apiKey.trim();
+      }
+
+      const res = await fetch("/api/lesson/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
-          topic: activeTab === "topic" ? topicInput : uploadedFile?.name,
-          documentId: uploadedFile ? "doc_physics_ch4" : undefined,
+          topic: chosenTopic,
+          documentId: activeTab === "material" && uploadedFile ? "doc_physics_ch4" : undefined,
           qualificationLevel,
           level,
           goal,
@@ -108,14 +131,23 @@ export default function CreateLessonPage() {
           preferredStyle: style,
           availableTime: time,
           depth,
+          apiKey: apiKey.trim() || undefined,
         }),
       });
-    } catch {
-      // ignore
+      const data = await res.json();
+      if (data.success && data.lessonId) {
+        targetLessonId = data.lessonId;
+        if (data.lessonState && typeof window !== "undefined") {
+          sessionStorage.setItem(`lesson_${targetLessonId}`, JSON.stringify(data.lessonState));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to create dynamic lesson:", err);
     }
 
-    router.push("/classroom/lesson_physics_101");
+    router.push(`/classroom/${targetLessonId}`);
   };
+
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] bg-grid-pattern py-12 px-4 sm:px-6 lg:px-8">
@@ -195,7 +227,51 @@ export default function CreateLessonPage() {
         </AnimatePresence>
 
         {/* MAIN CARD */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl space-y-8">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl space-y-6">
+          {/* GEMINI API KEY STATUS BAR */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${apiKey ? "bg-emerald-500 animate-pulse" : "bg-sky-500"}`} />
+                <span className="font-bold text-slate-800">Single Gemini API Key Engine</span>
+                <span className="text-slate-500 text-[11px] hidden sm:inline">
+                  {apiKey ? `(Key: ${apiKey.slice(0, 6)}...${apiKey.slice(-4)})` : "(Using .env or intelligent generator)"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyInput(!showKeyInput)}
+                className="text-sky-600 font-bold hover:underline text-[11px]"
+              >
+                {showKeyInput ? "Close" : apiKey ? "Change Key" : "+ Enter Gemini API Key"}
+              </button>
+            </div>
+
+            {showKeyInput && (
+              <div className="pt-2 border-t border-slate-200 space-y-2">
+                <p className="text-[11px] text-slate-600">
+                  Paste your Google Gemini API key to generate live custom lectures on <strong>any topic</strong>. Saved locally in your browser.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => handleKeySave(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-sky-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyInput(false)}
+                    className="rounded-xl bg-sky-600 px-4 py-1.5 text-white font-bold text-xs hover:bg-sky-700 transition-colors"
+                  >
+                    Save Key
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* TAB SELECTOR: OPTION A vs OPTION B */}
           <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200">
             <button
@@ -225,39 +301,33 @@ export default function CreateLessonPage() {
           {/* TAB CONTENT */}
           {activeTab === "topic" ? (
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-800">What do you want to learn?</label>
+              <label className="text-xs font-bold text-slate-800">What do you want to learn? (Any topic or concept)</label>
               <input
                 type="text"
                 value={topicInput}
                 onChange={(e) => setTopicInput(e.target.value)}
-                placeholder="e.g. Teach me Newton's Laws from the beginning"
+                placeholder="e.g. Photosynthesis, Binary Search Trees, Machine Learning, World War II, Indian Constitution..."
                 className="w-full rounded-2xl border border-slate-300 bg-slate-50/50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all font-sans"
               />
-              <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                <span className="font-medium text-slate-400">Popular prompts:</span>
-                <button
-                  type="button"
-                  onClick={() => setTopicInput("Teach me Newton's Laws and Electrical Circuits from the beginning")}
-                  className="hover:text-sky-700 underline"
-                >
-                  Newton's Laws & Circuits
-                </button>
-                •
-                <button
-                  type="button"
-                  onClick={() => setTopicInput("Explain Quantum Mechanics using simple real-world analogies")}
-                  className="hover:text-sky-700 underline"
-                >
-                  Quantum Mechanics
-                </button>
-                •
-                <button
-                  type="button"
-                  onClick={() => setTopicInput("Teach me React component lifecycle for a technical interview")}
-                  className="hover:text-sky-700 underline"
-                >
-                  React Lifecycle
-                </button>
+              <div className="flex flex-wrap gap-1.5 text-xs text-slate-600 pt-1">
+                <span className="font-semibold text-slate-500 mr-1 text-[11px] self-center">Try asking:</span>
+                {[
+                  "Photosynthesis & Light Reactions",
+                  "Binary Search Trees",
+                  "Machine Learning Gradient Descent",
+                  "Calculus Derivatives & Limits",
+                  "Newton's Laws & Circuits",
+                  "French Revolution",
+                ].map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setTopicInput(prompt)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-sky-50 hover:text-sky-700 hover:border-sky-300 transition-all shadow-2xs"
+                  >
+                    {prompt}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (

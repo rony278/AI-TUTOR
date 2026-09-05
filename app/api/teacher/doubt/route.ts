@@ -15,13 +15,14 @@ export async function POST(req: Request) {
     const db = DatabaseStore.getInstance();
     const state = db.getOrCreateLessonState(lessonId);
 
-    const resolution = DoubtResolutionEngine.resolveDoubt(query, state, db.chunks || []);
+    const resolution = await DoubtResolutionEngine.resolveDoubt(query, state, db.chunks || []);
 
     return NextResponse.json({
       success: true,
       resolution,
       sourceType: resolution.sourceType,
     });
+
   } catch (error: any) {
     console.error("Doubt error:", error);
     return NextResponse.json({ success: false, error: error?.message || "Internal server error" }, { status: 500 });

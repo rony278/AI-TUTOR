@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
-import { DatabaseStore, physicsLessonPlan } from "@/lib/db/in-memory-db";
-import { LearnerLevel, LearningGoal, SupportedLanguage, TeachingStyle, LessonDuration, LessonDepth } from "@/types/teaching";
+import { DatabaseStore } from "@/lib/db/in-memory-db";
+import { LessonGenerator } from "@/lib/teaching/lesson-generator";
+import {
+  LearnerLevel,
+  LearningGoal,
+  SupportedLanguage,
+  TeachingStyle,
+  LessonDuration,
+  LessonDepth,
+  LessonState,
+} from "@/types/teaching";
 
 export async function POST(req: Request) {
   try {
@@ -32,43 +41,78 @@ export async function POST(req: Request) {
       depth: depth as LessonDepth,
     };
 
-    // Calculate time allocations based on availableTime
-    let targetMins = 20;
-    if (availableTime === "5m") targetMins = 5;
-    else if (availableTime === "10m") targetMins = 10;
-    else if (availableTime === "30m") targetMins = 30;
-    else if (availableTime === "60m") targetMins = 60;
+    // Find any document text if documentId is passed
+    let documentText: string | undefined = undefined;
+    if (documentId) {
+      const docChunks = db.chunks.filter((c) => c.documentId === documentId);
+      if (docChunks.length > 0) {
+        documentText = docChunks.map((c) => `${c.section}: ${c.content}`).join("\n\n");
+      }
+    }
 
-    const customPlan = {
-      ...physicsLessonPlan,
-      id: lessonId,
-      title: topic || (documentId ? "Document Deep-Dive: Dynamics & Circuits" : physicsLessonPlan.title),
-      targetDurationMinutes: targetMins,
-      allocatedTime: {
-        introMinutes: Math.max(1, Math.round(targetMins * 0.1)),
-        conceptsMinutes: Math.max(2, Math.round(targetMins * 0.5)),
-        interactionMinutes: Math.max(1, Math.round(targetMins * 0.2)),
-        assessmentMinutes: Math.max(1, Math.round(targetMins * 0.15)),
-        bufferMinutes: Math.max(1, Math.round(targetMins * 0.05)),
+    const headerKey = req.headers.get("x-gemini-key") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const apiKey = (body.apiKey || headerKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+
+    // Generate dynamic lesson plan & knowledge graph using Gemini (or smart fallback)
+    const { lessonPlan, knowledgeGraph } = await LessonGenerator.generateLesson(
+      {
+        topic,
+        documentId,
+        qualificationLevel,
+        level: level as LearnerLevel,
+        goal: goal as LearningGoal,
+        language: language as SupportedLanguage,
+        preferredStyle: preferredStyle as TeachingStyle,
+        availableTime: availableTime as LessonDuration,
+        depth: depth as LessonDepth,
+        documentText,
+        apiKey,
       },
+      lessonId
+    );
+
+    // Create full lesson state
+    const lessonState: LessonState = {
+      lessonId,
+      title: lessonPlan.title,
+      studentProfile: { ...db.studentProfile },
+      brainState: "TEACH",
+      knowledgeGraph,
+      lessonPlan,
+      currentStepIndex: 0,
+      currentConceptId: lessonPlan.steps[0]?.conceptId || "concept_core",
+      currentDifficulty: level as LearnerLevel,
+      currentLanguage: language as SupportedLanguage,
+      mode: "TEACH",
+      timeRemainingSeconds: lessonPlan.targetDurationMinutes * 60,
+      totalElapsedSeconds: 0,
+      isPaused: false,
+      isSpeaking: false,
+      isListening: false,
+      questionsAskedCount: 0,
+      correctAnswersCount: 0,
+      activeMisconceptions: [],
+      resolvedMisconceptions: [],
+      adaptationHistory: [],
     };
 
-    const lessonState = db.getOrCreateLessonState(lessonId);
-    lessonState.lessonPlan = customPlan;
-    lessonState.currentLanguage = language as SupportedLanguage;
-    lessonState.currentDifficulty = level as LearnerLevel;
+    // Store in global DB
+    db.setLessonState(lessonId, lessonState);
 
     return NextResponse.json({
       success: true,
       lessonId,
-      lessonPlan: customPlan,
+      lessonPlan,
+      lessonState,
       studentProfile: db.studentProfile,
-      knowledgeGraph: db.knowledgeGraph,
+      knowledgeGraph,
     });
   } catch (error: any) {
+    console.error("[api/lesson/create] Error generating lesson:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to create lesson" },
       { status: 500 }
     );
   }
 }
+

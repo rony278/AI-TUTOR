@@ -33,9 +33,21 @@ export default function ClassroomPage() {
   const lessonId = (params?.lessonId as string) || "lesson_physics_101";
 
   const db = DatabaseStore.getInstance();
-  const [lessonState, setLessonState] = useState<LessonState>(() =>
-    db.getOrCreateLessonState(lessonId)
-  );
+  const [lessonState, setLessonState] = useState<LessonState>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem(`lesson_${lessonId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.lessonPlan?.steps?.length > 0) {
+            db.setLessonState(lessonId, parsed);
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return db.getOrCreateLessonState(lessonId);
+  });
 
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -56,14 +68,52 @@ export default function ClassroomPage() {
       id: "note-init-1",
       timestamp: "00:01",
       type: "CONCEPT",
-      title: "Core Foundation: Force & Acceleration",
-      detail: "Acceleration of an object is directly proportional to net external force applied and inversely proportional to its mass.",
-      formulaSnippet: "F = m · a  (Vector: \\vec{F}_{net} = m \\cdot \\vec{a})",
-      sourceTag: "Physics Chapter 4, Sec 4.2",
+      title: "Core Foundation",
+      detail: "Initializing lesson curriculum...",
     },
   ]);
 
+  // Sync with server-generated lesson state on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicLesson() {
+      try {
+        const queryTopic = encodeURIComponent(lessonState?.title || "");
+        const res = await fetch(`/api/lesson/${lessonId}?topic=${queryTopic}`);
+        const data = await res.json();
+        if (isMounted && data.success && data.lessonState) {
+          setLessonState(data.lessonState);
+          db.setLessonState(lessonId, data.lessonState);
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(`lesson_${lessonId}`, JSON.stringify(data.lessonState));
+          }
+          const firstStep = data.lessonState.lessonPlan?.steps?.[0];
+          if (firstStep) {
+            setAutoNotes([
+              {
+                id: `note-init-${Date.now()}`,
+                timestamp: "00:01",
+                type: "CONCEPT",
+                title: firstStep.title,
+                detail: firstStep.spokenScript?.slice(0, 160) + "...",
+                formulaSnippet: (firstStep.visual?.data as any)?.formula,
+                sourceTag: firstStep.sourceCitation?.docTitle || data.lessonState.title,
+              },
+            ]);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not sync server lesson:", err);
+      }
+    }
+    loadDynamicLesson();
+    return () => {
+      isMounted = false;
+    };
+  }, [lessonId]);
+
   const currentStep = lessonState.lessonPlan.steps[currentStepIdx] || lessonState.lessonPlan.steps[0];
+
 
   // Derive script according to current language
   const getSpokenScript = () => {
@@ -363,6 +413,8 @@ export default function ClassroomPage() {
               onReplay={() => speakText(getSpokenScript())}
               speechRate={speechRate}
               onRateChange={setSpeechRate}
+              lessonTitle={lessonState.title}
+              stepFormula={(currentStep.visual?.data as any)?.formula}
             />
 
             {/* Clean Student Helper Card (Replaces noisy telemetry) */}

@@ -1,42 +1,58 @@
 import { NextResponse } from "next/server";
+import { DatabaseStore } from "@/lib/db/in-memory-db";
+import { GeminiLLMProvider } from "@/providers/llm/gemini-provider";
 
 export async function POST(req: Request) {
   try {
-    const flashcards = [
+    const body = await req.json().catch(() => ({}));
+    const { lessonId = "lesson_physics_101" } = body;
+    const db = DatabaseStore.getInstance();
+    const state = db.getOrCreateLessonState(lessonId);
+
+    const gemini = new GeminiLLMProvider();
+    if (gemini.hasValidKey()) {
+      try {
+        const prompt = `Generate 5 high-yield study flashcards for this lesson:
+Topic: "${state.title}"
+Subject: "${state.lessonPlan?.subject || "General"}"
+
+Format as JSON array of 5 objects:
+[
+  {
+    "id": "fc_1",
+    "type": "Formula" | "Concept" | "Application" | "Question/Answer",
+    "front": "Question or term on front of card",
+    "back": "Clear concise answer or explanation on back",
+    "concept": "Name of concept"
+  }
+]`;
+
+        const dynamicFlashcards = await gemini.generateJson<any[]>([
+          { role: "user", content: prompt }
+        ]);
+
+        if (Array.isArray(dynamicFlashcards) && dynamicFlashcards.length > 0) {
+          return NextResponse.json({ success: true, flashcards: dynamicFlashcards });
+        }
+      } catch (err) {
+        console.warn("[flashcards/generate] Gemini generation failed, using fallback:", err);
+      }
+    }
+
+    // Dynamic fallback based on lesson steps
+    const flashcards = state.lessonPlan?.steps?.slice(0, 5).map((step, idx) => ({
+      id: `fc_${idx + 1}`,
+      type: step.visual?.type === "EQUATION" ? "Formula" : "Concept",
+      front: `What is the core intuition behind ${step.title}?`,
+      back: step.spokenScript?.slice(0, 180) + "...",
+      concept: step.title,
+    })) || [
       {
         id: "fc_1",
-        type: "Formula",
-        front: "What is the formula for Newton's Second Law?",
-        back: "F = m · a (Net Force = mass × acceleration). In units: 1 Newton = 1 kg·m/s².",
-        concept: "Newton's 2nd Law",
-      },
-      {
-        id: "fc_2",
         type: "Concept",
-        front: "What happens to acceleration if net force triples and mass remains constant?",
-        back: "Acceleration triples (3x), because acceleration is directly proportional to net force (a = F/m).",
-        concept: "Proportionality",
-      },
-      {
-        id: "fc_3",
-        type: "Formula",
-        front: "State Ohm's Law solving explicitly for Current (I).",
-        back: "I = V / R (Current = Voltage ÷ Resistance). Current is inversely proportional to resistance.",
-        concept: "Ohm's Law",
-      },
-      {
-        id: "fc_4",
-        type: "Application",
-        front: "In the water-pipe analogy of electricity, what corresponds to Voltage, Current, and Resistance?",
-        back: "Voltage = Water Pressure (Pump)\nCurrent = Water Flow Rate\nResistance = Pipe Narrowing / Constriction",
-        concept: "Hydraulic Analogy",
-      },
-      {
-        id: "fc_5",
-        type: "Question/Answer",
-        front: "If you add a 50Ω resistor in series to a circuit with a lightbulb, why does the lightbulb dim?",
-        back: "Total circuit resistance increases, which decreases current (I = V/R_total). Less current means lower power output and dimmer light.",
-        concept: "Circuit Dynamics",
+        front: `What is the foundational law of ${state.title}?`,
+        back: state.lessonPlan?.overview || "Proportional dynamics governing the system.",
+        concept: state.title,
       },
     ];
 
@@ -45,3 +61,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+

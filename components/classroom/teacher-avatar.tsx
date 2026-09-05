@@ -31,6 +31,8 @@ interface TeacherAvatarProps {
   onReplay: () => void;
   speechRate: number;
   onRateChange: (rate: number) => void;
+  lessonTitle?: string;
+  stepFormula?: string;
 }
 
 export function TeacherAvatar({
@@ -42,6 +44,8 @@ export function TeacherAvatar({
   onReplay,
   speechRate,
   onRateChange,
+  lessonTitle,
+  stepFormula,
 }: TeacherAvatarProps) {
   // Delivery Mode: Video vs Interactive Avatar
   const [deliveryMode, setDeliveryMode] = useState<"video" | "avatar">("video");
@@ -141,6 +145,13 @@ export function TeacherAvatar({
 
   // Requirement #17: Synchronized Visual Overlay based on speech content & timestamp
   const getSynchronizedOverlay = () => {
+    if (stepFormula) {
+      return {
+        formula: stepFormula,
+        note: lessonTitle || "Active Dynamic Concept",
+        color: "border-sky-300 bg-sky-50 text-sky-900",
+      };
+    }
     const text = spokenText.toLowerCase();
     if (text.includes("newton") || text.includes("force")) {
       return {
@@ -161,6 +172,13 @@ export function TeacherAvatar({
         formula: "Flow ∝ 1 / Pinch",
         note: "Hydraulic Analogy Remediation",
         color: "border-amber-300 bg-amber-50 text-amber-900",
+      };
+    }
+    if (lessonTitle) {
+      return {
+        formula: lessonTitle.split(":")[0]?.slice(0, 30) || "Dynamic Topic",
+        note: "Pedagogical Focus",
+        color: "border-sky-300 bg-sky-50 text-sky-900",
       };
     }
     return null;

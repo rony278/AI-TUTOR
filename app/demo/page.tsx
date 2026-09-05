@@ -18,25 +18,223 @@ import {
   ArrowRight,
   ShieldCheck,
   GraduationCap,
+  Loader2,
+  Zap,
+  Search,
 } from "lucide-react";
+
 
 export default function JudgeDemoPage() {
   const [currentSceneIdx, setCurrentSceneIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [activeLessonId, setActiveLessonId] = useState("lesson_physics_101");
+  const [customTopic, setCustomTopic] = useState("");
+
+  const [topicData, setTopicData] = useState({
+    title: "Newton's Second Law & Ohm's Electrical Dynamics",
+    subject: "Physics",
+    qualification: "Undergraduate (College)",
+    formula: "F = m · a",
+    concept1: "Voltage (12V)",
+    concept2: "Current (I)",
+    concept3: "Resistance & Ohm's Law",
+    teacherQuote: "When net force acts on a mass, it accelerates proportionally in that direction.",
+    question: "If net force acting on an object doubles while mass remains constant, what happens to acceleration?",
+    wrongOption: "Intentional Student Trap: Student selects 'Acceleration stays constant while velocity doubles'",
+    correctOption: "Acceleration doubles (2x)",
+    misconception: "Kinematics Conflation: Student confused velocity with acceleration.",
+    analogyTitle: "Hydraulic Water-Pipe Analogy",
+    analogyQuote: "Squeezing the pipe (higher resistance) constricts water flow (current). When resistance goes up, current must drop!",
+    hindiScript: "Bilkul! Current aur resistance inversely proportional hote hain. Jaise pipe ko squeeze karne par paani ka flow kam ho jata hai, waise hi resistance badhne par current kam ho jata hai.",
+    nextTopic: "Series Circuits (5 min)",
+  });
+
+  const presetTopics = [
+    {
+      name: "Newton's Laws & Circuits",
+      title: "Newton's Second Law & Ohm's Electrical Dynamics",
+      subject: "Physics",
+      formula: "F = m · a",
+      concept1: "Voltage (12V)",
+      concept2: "Current (I)",
+      concept3: "Resistance & Ohm's Law",
+      teacherQuote: "When net force acts on a mass, it accelerates proportionally in that direction.",
+      question: "If net force acting on an object doubles while mass remains constant, what happens to acceleration?",
+      wrongOption: "Trap: 'Acceleration stays constant while velocity doubles'",
+      correctOption: "Acceleration doubles (2x)",
+      misconception: "Kinematics Conflation: Student confused velocity with instantaneous acceleration.",
+      analogyTitle: "Hydraulic Water-Pipe Analogy",
+      analogyQuote: "Squeezing the pipe (higher resistance) constricts water flow (current). Resistance goes up, current drops!",
+      hindiScript: "Bilkul! Current aur resistance inversely proportional hote hain. Jaise pipe ko squeeze karne par paani ka flow kam ho jata hai, waise hi resistance badhne par current kam ho jata hai.",
+      nextTopic: "Series Circuits (5 min)",
+    },
+    {
+      name: "React Component Lifecycle",
+      title: "React Component Lifecycle & State Dynamics",
+      subject: "Computer Science",
+      formula: "UI = f(state, props)",
+      concept1: "Initial Mount",
+      concept2: "State Re-render",
+      concept3: "Cleanup / Unmount",
+      teacherQuote: "Every React component is a pure function of its state and props. When state mutates, a re-render is scheduled.",
+      question: "If you mutate a state variable directly without calling the setter function, what happens?",
+      wrongOption: "Trap: 'The component re-renders immediately with the new value'",
+      correctOption: "React misses the mutation because direct mutation bypasses scheduled re-renders",
+      misconception: "Reference Invalidation Fallacy: Assuming in-place object mutation triggers reactive re-render cycles.",
+      analogyTitle: "Restaurant Kitchen Order Slip Analogy",
+      analogyQuote: "Writing your own note without handing the ticket to the head chef means the kitchen never cooks your new order!",
+      hindiScript: "Bilkul! React mein state ko directly mutate karne par React ko pata hi nahi chalta ki re-render karna hai. Hamesha setState setter use karein.",
+      nextTopic: "useEffect Dependency Arrays (5 min)",
+    },
+    {
+      name: "Photosynthesis & Energy",
+      title: "Photosynthesis: Light Reactions & Calvin Cycle",
+      subject: "Biology",
+      formula: "6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂",
+      concept1: "Photon Capture",
+      concept2: "Electron Transport",
+      concept3: "Glucose Synthesis",
+      teacherQuote: "Chloroplasts capture photons to split water molecules, generating ATP and NADPH to fuel carbon fixation.",
+      question: "What is the primary source of the oxygen gas released during photosynthesis?",
+      wrongOption: "Trap: 'Oxygen comes from the broken down carbon dioxide (CO₂) molecule'",
+      correctOption: "Oxygen originates exclusively from the photolysis (splitting) of water (H₂O)",
+      misconception: "Carbon Fixation Source Fallacy: Confusing oxygen byproduct with oxygen atoms in CO₂ intake.",
+      analogyTitle: "Solar Battery & Sugar Bakery Analogy",
+      analogyQuote: "Light reactions act like solar solar panels charging battery packs, which then power the dark kitchen bakery!",
+      hindiScript: "Bilkul! Paudhe jo oxygen release karte hain, wo carbon dioxide se nahi balki paani (H2O) ke split hone se aati hai.",
+      nextTopic: "Cellular Respiration ATP Coupling (5 min)",
+    },
+    {
+      name: "Machine Learning Gradient Descent",
+      title: "Gradient Descent & Loss Optimization",
+      subject: "Artificial Intelligence",
+      formula: "θ := θ - α · ∇J(θ)",
+      concept1: "Loss Function J(θ)",
+      concept2: "Learning Rate α",
+      concept3: "Gradient Vector ∇J",
+      teacherQuote: "Gradient descent computes the steepest slope of the error surface and takes small steps downhill toward minimum error.",
+      question: "If the learning rate (alpha) is set excessively high, what is the most likely outcome?",
+      wrongOption: "Trap: 'The model reaches the optimal minimum in fewer steps'",
+      correctOption: "The weights will overshoot the valley and diverge uncontrollably",
+      misconception: "Monotonic Speedup Fallacy: Believing larger step sizes guarantee strictly faster convergence.",
+      analogyTitle: "Foggy Mountain Hiker Analogy",
+      analogyQuote: "Taking giant leaps with your eyes closed down a foggy valley causes you to hurdle right over the bottom and crash into the opposite cliff!",
+      hindiScript: "Bilkul! Agar learning rate bohot bada ho, toh loss decrease hone ke bajaye diverge ho jayega aur model crash karega.",
+      nextTopic: "Stochastic & Adam Optimizers (5 min)",
+    },
+  ];
+
+  // Handle topic switch or generation
+  const handleSelectTopic = async (topicObj: any) => {
+    setIsGenerating(true);
+    try {
+      const storedKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (storedKey.trim()) headers["x-gemini-key"] = storedKey.trim();
+
+      const res = await fetch("/api/lesson/create", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          topic: topicObj.title || topicObj.name,
+          qualificationLevel: "Undergraduate (College / B.Tech / B.Sc)",
+          level: "Beginner",
+          language: "English",
+          availableTime: "20m",
+          apiKey: storedKey || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.lessonId) {
+        setActiveLessonId(data.lessonId);
+        if (data.lessonState && typeof window !== "undefined") {
+          sessionStorage.setItem(`lesson_${data.lessonId}`, JSON.stringify(data.lessonState));
+        }
+      }
+      setTopicData(topicObj);
+      setCurrentSceneIdx(0);
+    } catch (err) {
+      console.warn("Topic demo generation failed:", err);
+      setTopicData(topicObj);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCustomTopicSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTopic.trim()) return;
+
+    setIsGenerating(true);
+    try {
+      const storedKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (storedKey.trim()) headers["x-gemini-key"] = storedKey.trim();
+
+      const res = await fetch("/api/lesson/create", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          topic: customTopic.trim(),
+          qualificationLevel: "Undergraduate (College / B.Tech / B.Sc)",
+          level: "Beginner",
+          language: "English",
+          availableTime: "20m",
+          apiKey: storedKey || undefined,
+        }),
+      });
+      const data = await res.json();
+      const newLessonId = data.lessonId || `lesson_${Date.now()}`;
+      setActiveLessonId(newLessonId);
+      if (data.lessonState && typeof window !== "undefined") {
+        sessionStorage.setItem(`lesson_${newLessonId}`, JSON.stringify(data.lessonState));
+      }
+
+      const plan = data.lessonPlan;
+      const step1 = plan?.steps?.[0];
+      const step4 = plan?.steps?.[3];
+      const step5 = plan?.steps?.[4];
+
+      setTopicData({
+        title: plan?.title || customTopic.trim(),
+        subject: plan?.subject || "General Science",
+        qualification: "Undergraduate (College)",
+        formula: (step1?.visual?.data as any)?.formula || (step1?.visual?.title) || "Key Axiom Formula",
+        concept1: data.knowledgeGraph?.nodes?.[0]?.title || "Fundamental Principles",
+        concept2: data.knowledgeGraph?.nodes?.[1]?.title || "Core Mechanics",
+        concept3: data.knowledgeGraph?.nodes?.[2]?.title || "Practical Application",
+        teacherQuote: step1?.spokenScript?.slice(0, 140) || `Mastering ${customTopic} through closed-loop adaptive intelligence.`,
+        question: step4?.question?.prompt || `In ${customTopic}, how do variables balance when input changes?`,
+        wrongOption: `Trap: ${step4?.question?.options?.find((o: any) => !o.isCorrect)?.misconceptionTrigger || "Inverted relationship"}`,
+        correctOption: step4?.question?.options?.find((o: any) => o.isCorrect)?.text || "Directly proportional throughput",
+        misconception: step4?.question?.options?.find((o: any) => !o.isCorrect)?.misconceptionTrigger || "Conceptual Inversion Trap",
+        analogyTitle: step5?.visual?.title || "Intuitive Real-World Analogy",
+        analogyQuote: step5?.spokenScript?.slice(0, 140) || "Using concrete mental models helps demystify abstract principles!",
+        hindiScript: step1?.spokenScriptHinglish || step1?.spokenScriptHindi || "Bilkul! Hum is topic ko step-by-step Hindi aur Hinglish mein samajh sakte hain bina kisi confusion ke.",
+        nextTopic: `${customTopic} Advanced Module (5 min)`,
+      });
+      setCurrentSceneIdx(0);
+    } catch (err) {
+      console.warn("Failed to generate custom demo:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const demoScenes = [
     {
       id: 1,
       title: "Scene 1: Welcome & Pedagogical Objective",
-      subtitle: "The AI teacher that learns how you learn",
+      subtitle: `Target Topic: ${topicData.title}`,
       badge: "Vision",
-      description: "Demonstrating that AI Teacher is NOT a chatbot, but an active, closed-loop educational intelligence.",
+      description: "Demonstrating that AI Teacher is NOT a chatbot, but an active, closed-loop educational intelligence that learns how you learn.",
       visualContent: (
         <div className="rounded-2xl border border-sky-300 bg-sky-50/70 p-6 text-center space-y-4">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500 text-white shadow-md shadow-sky-500/30">
             <Sparkles className="h-6 w-6" />
           </div>
-          <h3 className="text-2xl font-black text-slate-900">AI Teacher</h3>
+          <h3 className="text-2xl font-black text-slate-900">{topicData.title}</h3>
           <p className="text-sm text-slate-600 max-w-md mx-auto font-medium">
             "The AI teacher that learns how you learn."
           </p>
@@ -50,22 +248,22 @@ export default function JudgeDemoPage() {
     {
       id: 2,
       title: "Scene 2: Material Ingestion & Qualification Setup",
-      subtitle: "Uploading Physics_Chapter_4.pdf with Qualification Level Selection",
+      subtitle: `Calibrating Pedagogy for ${topicData.subject}`,
       badge: "RAG & Profile",
-      description: "Learner selects Undergraduate qualification, Beginner proficiency, Hindi/Hinglish language, and Visual style.",
+      description: `Learner selects ${topicData.qualification} qualification, Beginner proficiency, Hindi/Hinglish language, and Visual style.`,
       visualContent: (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 space-y-4 text-xs">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-emerald-600" />
-              <span className="font-bold text-slate-900">Physics_Chapter_4_Dynamics_and_Circuits.pdf</span>
+              <span className="font-bold text-slate-900">{topicData.title}.pdf</span>
             </div>
-            <span className="text-emerald-700 font-mono font-bold">18 Chunks Indexed</span>
+            <span className="text-emerald-700 font-mono font-bold">Semantic Vectors Indexed</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <span className="text-slate-400 text-[10px] block font-mono font-bold">Qualification</span>
-              <span className="text-slate-900 font-bold">Undergraduate (College)</span>
+              <span className="text-slate-900 font-bold">{topicData.qualification}</span>
             </div>
             <div className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <span className="text-slate-400 text-[10px] block font-mono font-bold">Language</span>
@@ -96,41 +294,41 @@ export default function JudgeDemoPage() {
             <span>Topological Concept Dependency Graph Generated</span>
           </div>
           <div className="flex items-center justify-around py-3 font-mono font-bold">
-            <div className="p-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 shadow-2xs">
-              Voltage (12V)
+            <div className="p-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 shadow-2xs truncate max-w-[140px]">
+              {topicData.concept1}
             </div>
             <span className="text-slate-400">→</span>
-            <div className="p-2 rounded-xl bg-white border border-sky-300 text-sky-800 shadow-2xs">
-              Current (I)
+            <div className="p-2 rounded-xl bg-white border border-sky-300 text-sky-800 shadow-2xs truncate max-w-[140px]">
+              {topicData.concept2}
             </div>
             <span className="text-slate-400">→</span>
-            <div className="p-2 rounded-xl bg-white border border-rose-300 text-rose-800 shadow-2xs">
-              Resistance & Ohm's Law
+            <div className="p-2 rounded-xl bg-white border border-rose-300 text-rose-800 shadow-2xs truncate max-w-[140px]">
+              {topicData.concept3}
             </div>
           </div>
           <p className="text-[11px] text-slate-700 font-medium">
-            Allocated: Intro (2m) • Newton's 2nd Law (5m) • Ohm's Law (5m) • Diagnostic Checks (4m) • Assessment (4m).
+            Allocated: Intro (2m) • Core Breakdown (5m) • System Demo (5m) • Diagnostic Checks (4m) • Assessment (4m).
           </p>
         </div>
       ),
     },
     {
       id: 4,
-      title: "Scene 4: AI Teacher Introduces Newton's Second Law",
-      subtitle: "Synchronized Spoken Audio + Dynamic Free-Body Diagram",
+      title: "Scene 4: AI Teacher Introduces the Concept",
+      subtitle: "Synchronized Spoken Audio + Dynamic Visual Stage",
       badge: "Visual Intelligence",
-      description: "Teacher introduces F = ma with dynamic vector arrows stretching proportionally.",
+      description: "Teacher introduces the governing formula and foundational intuition with visual synchronization.",
       visualContent: (
         <div className="rounded-2xl border border-sky-300 bg-white p-6 space-y-4 text-center shadow-sm">
-          <div className="inline-block rounded-2xl border border-sky-200 bg-sky-50 px-6 py-4 font-mono text-4xl font-black text-slate-900">
-            F = m · a
+          <div className="inline-block rounded-2xl border border-sky-200 bg-sky-50 px-6 py-4 font-mono text-3xl sm:text-4xl font-black text-slate-900">
+            {topicData.formula}
           </div>
           <p className="text-xs text-slate-700 max-w-md mx-auto italic font-medium">
-            "Teacher: When net force acts on a mass, it accelerates proportionally in that direction."
+            "{topicData.teacherQuote}"
           </p>
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] text-emerald-800 font-bold border border-emerald-200">
             <ShieldCheck className="h-3 w-3 text-emerald-600" />
-            Grounded in Physics_Chapter_4.pdf • Page 31
+            Grounded in Dynamic Curriculum • {topicData.subject}
           </div>
         </div>
       ),
@@ -138,20 +336,20 @@ export default function JudgeDemoPage() {
     {
       id: 5,
       title: "Scene 5: Diagnostic Checkpoint Question",
-      subtitle: "Teacher tests intuitive understanding",
+      subtitle: "Teacher tests intuitive understanding, not rote memorization",
       badge: "Questioning",
-      description: "Teacher asks: 'If force doubles while mass remains constant, what happens to acceleration?'",
+      description: `Teacher asks: "${topicData.question}"`,
       visualContent: (
         <div className="rounded-2xl border border-amber-300 bg-amber-50/70 p-6 space-y-3 text-xs">
           <h4 className="font-bold text-slate-900 text-sm">
-            Question: If net force acting on an object doubles while mass remains constant, what happens to acceleration?
+            Question: {topicData.question}
           </h4>
           <div className="space-y-2">
             <div className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-700">
-              A) Acceleration doubles (2x)
+              A) {topicData.correctOption}
             </div>
             <div className="p-2.5 rounded-xl border border-amber-300 bg-amber-100 text-amber-950 font-bold">
-              B) Intentional Student Trap: Student selects 'Acceleration stays constant while velocity doubles'
+              B) {topicData.wrongOption}
             </div>
           </div>
         </div>
@@ -162,15 +360,15 @@ export default function JudgeDemoPage() {
       title: "Scene 6: Misconception Detected & Policy Triggered",
       subtitle: "AI Teacher does NOT say 'Wrong' — it diagnoses the cognitive flaw",
       badge: "Cognitive Diagnosis",
-      description: "Misconception engine detects kinematics confusion. Policy Engine adapts strategy from Technical to Visual Analogy and reduces difficulty.",
+      description: "Misconception engine detects conceptual confusion. Policy Engine adapts strategy from Technical to Visual Analogy and reduces difficulty.",
       visualContent: (
         <div className="rounded-2xl border border-rose-300 bg-rose-50/80 p-6 space-y-3 text-xs">
           <div className="flex items-center gap-2 text-rose-800 font-bold">
             <AlertTriangle className="h-4 w-4 text-rose-600" />
-            <span>Misconception Detected: Kinematics Conflation</span>
+            <span>Misconception Detected: {topicData.misconception}</span>
           </div>
           <p className="text-slate-800 font-medium">
-            Student confused velocity with acceleration. Believes constant force directly holds constant velocity.
+            Student selected the cognitive trap. Teacher detects flawed mental model and intervenes immediately.
           </p>
           <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
             <div className="p-2 rounded-xl bg-white border border-rose-200 shadow-2xs">
@@ -187,25 +385,24 @@ export default function JudgeDemoPage() {
     },
     {
       id: 7,
-      title: "Scene 7: Adaptive Water-Pipe Analogy & Mastery Recovered",
-      subtitle: "Teacher re-explains using hydraulic constriction",
+      title: "Scene 7: Adaptive Real-World Analogy & Mastery Recovered",
+      subtitle: `Teacher re-explains using: ${topicData.analogyTitle}`,
       badge: "Adaptive Re-teaching",
-      description: "Teacher shows water flowing through a pinched pipe. Student re-tests and answers correctly!",
+      description: "Teacher uses an intuitive real-world mental model. Student re-tests and answers correctly!",
       visualContent: (
         <div className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-6 space-y-3 text-xs">
           <div className="flex items-center justify-between text-emerald-800 font-bold">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              Hydraulic Analogy Remediation Complete
+              Adaptive Remediation Complete
             </span>
             <span className="text-xs font-mono">Score: 100%</span>
           </div>
           <p className="text-slate-800 font-medium">
-            "Teacher: Squeezing the pipe (higher resistance) constricts water flow (current). When resistance goes up,
-            current must drop!"
+            "Teacher: {topicData.analogyQuote}"
           </p>
           <div className="p-2.5 rounded-xl bg-white border border-emerald-300 text-emerald-900 font-bold shadow-2xs">
-            Student Follow-Up Answer: "Current decreases because resistance opposes electron throughput." ✓ Correct!
+            Student Follow-Up Answer: "{topicData.correctOption}" ✓ Correct!
           </div>
         </div>
       ),
@@ -223,11 +420,10 @@ export default function JudgeDemoPage() {
             <span>Multilingual Teaching Stream Activated</span>
           </div>
           <p className="text-slate-800 italic leading-relaxed font-medium">
-            "AI Teacher: Bilkul! Current aur resistance inversely proportional hote hain. Jaise pipe ko squeeze karne par
-            paani ka flow kam ho jata hai, waise hi resistance badhne par current kam ho jata hai."
+            "AI Teacher: {topicData.hindiScript}"
           </p>
           <span className="text-[10px] font-mono text-slate-500 block font-semibold">
-            State Preserved: Step 6/7 • Mastery: 82% • Time Remaining: 12:45
+            State Preserved: Step 6/7 • Mastery: 85% • Time Remaining: 12:45
           </span>
         </div>
       ),
@@ -235,20 +431,20 @@ export default function JudgeDemoPage() {
     {
       id: 9,
       title: "Scene 9: Final Assessment & Comprehensive Report",
-      subtitle: "Overall Mastery Score: 82%",
+      subtitle: "Overall Mastery Score: 85%",
       badge: "Assessment",
-      description: "Full assessment breakdown highlighting mastered concepts, weak concepts, and cognitive trap resolution.",
+      description: "Full assessment breakdown highlighting mastered concepts, resolved cognitive traps, and performance rubric.",
       visualContent: (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4 text-center text-xs shadow-sm">
           <span className="text-5xl font-black text-slate-900">
-            82%
+            85%
           </span>
           <div className="grid grid-cols-2 gap-2 text-left">
             <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-semibold">
-              <strong>Mastered:</strong> Newton's 2nd Law, Voltage
+              <strong>Mastered:</strong> {topicData.concept1}, {topicData.concept2}
             </div>
             <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-semibold">
-              <strong>Needs Practice:</strong> Ohm's Law Resistance
+              <strong>Remediated:</strong> {topicData.concept3}
             </div>
           </div>
         </div>
@@ -257,15 +453,15 @@ export default function JudgeDemoPage() {
     {
       id: 10,
       title: "Scene 10: Next Best Action & Personalized Artifacts",
-      subtitle: "Personalized Practice Set, Notes, Flashcards & Next Topic",
+      subtitle: `Recommended Next Step: ${topicData.nextTopic}`,
       badge: "Long-Term Memory",
-      description: "AI Teacher recommends a 5-minute revision on Resistance and advances learning path to Series Circuits.",
+      description: `AI Teacher creates personalized study notes, flashcards, and homework for ${topicData.title}.`,
       visualContent: (
         <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-6 space-y-4 text-xs">
           <div className="flex items-center justify-between">
-            <span className="font-bold text-slate-900">Recommended Next Topic:</span>
+            <span className="font-bold text-slate-900">Recommended Next Step:</span>
             <span className="rounded-full bg-white px-3 py-1 text-sky-800 font-mono font-bold border border-sky-200">
-              Series Circuits (5 min)
+              {topicData.nextTopic}
             </span>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center font-bold">
@@ -277,6 +473,7 @@ export default function JudgeDemoPage() {
       ),
     },
   ];
+
 
   // Auto progression when playing
   useEffect(() => {
@@ -342,6 +539,79 @@ export default function JudgeDemoPage() {
           </div>
         </div>
 
+        {/* DYNAMIC TOPIC SELECTION & GENERATION FOR DEMO */}
+        <div className="rounded-3xl border border-sky-300 bg-white p-5 sm:p-6 shadow-md space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-sky-700 font-bold flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-sky-600" />
+                Live Dynamic Topic Calibration
+              </span>
+              <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                Active Demo Topic: <span className="text-sky-700">{topicData.title}</span>
+              </h3>
+            </div>
+            <Link
+              href={`/classroom/${activeLessonId}`}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white hover:bg-sky-700 transition-all shadow-xs self-start sm:self-auto"
+            >
+              <span>Launch Live Classroom →</span>
+            </Link>
+          </div>
+
+          {/* Quick presets */}
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-bold text-slate-500">Select Preset Lecture or Type Your Own:</span>
+            <div className="flex flex-wrap gap-2">
+              {presetTopics.map((pt) => (
+                <button
+                  key={pt.name}
+                  disabled={isGenerating}
+                  onClick={() => handleSelectTopic(pt)}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
+                    topicData.title === pt.title
+                      ? "border-sky-500 bg-sky-50 text-sky-900 font-bold ring-1 ring-sky-500 shadow-xs"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {pt.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom topic input */}
+          <form onSubmit={handleCustomTopicSubmit} className="flex gap-2 pt-1">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={customTopic}
+                onChange={(e) => setCustomTopic(e.target.value)}
+                placeholder="Ask for ANY topic (e.g. French Revolution, DNA Replication, Binary Search Trees...)"
+                disabled={isGenerating}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 font-medium"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isGenerating || !customTopic.trim()}
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:brightness-105 disabled:opacity-50 transition-all"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Generate Demo ⚡</span>
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
         {/* DEMO PROGRESS BAR (Requirement #38) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-mono font-bold">
@@ -350,6 +620,7 @@ export default function JudgeDemoPage() {
             </span>
             <span className="text-amber-700">{activeScene.badge}</span>
           </div>
+
 
           <div className="grid grid-cols-10 gap-1.5">
             {demoScenes.map((s, i) => (
@@ -434,13 +705,14 @@ export default function JudgeDemoPage() {
         {/* Direct Link to Classroom */}
         <div className="text-center pt-2">
           <Link
-            href="/classroom/lesson_physics_101"
-            className="inline-flex items-center gap-2 text-xs text-sky-700 font-bold hover:underline"
+            href={`/classroom/${activeLessonId}`}
+            className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-6 py-3 text-xs text-white font-bold hover:bg-sky-700 shadow-md shadow-sky-500/20 transition-all"
           >
-            <span>Open Interactive Classroom in Live Mode</span>
-            <ArrowRight className="h-3.5 w-3.5" />
+            <span>Open Interactive Classroom for "{topicData.title}" in Live Mode</span>
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
+
       </div>
     </div>
   );

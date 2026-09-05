@@ -7,6 +7,7 @@ export interface MisconceptionAnalysisInput {
   conceptTitle: string;
   studentAnswer: string;
   selectedOptionId?: string;
+  misconceptionTrigger?: string;
   lessonContext?: string;
 }
 
@@ -25,6 +26,19 @@ export class MisconceptionDetector {
    * Evaluates student response against known cognitive traps, conceptual confusions, and inverse relationships
    */
   public static detect(input: MisconceptionAnalysisInput): MisconceptionDetectionResult {
+    // 0. Explicit misconception trigger from QuestionOption
+    if (input.misconceptionTrigger) {
+      return {
+        isMisconception: true,
+        misconceptionType: input.misconceptionTrigger,
+        severity: "Critical",
+        explanation: `The student's answer demonstrates a classic misunderstanding: "${input.misconceptionTrigger}".`,
+        recommendedStrategy: "GIVE_ANALOGY",
+        recommendedVisual: `ANALOGY: Clarifying ${input.conceptTitle}`,
+        recommendedFollowUpQuestionPrompt: `Think about how ${input.conceptTitle} operates intuitively. Can you picture why that might lead to unexpected results?`,
+      };
+    }
+
     const answerNormalized = input.studentAnswer.toLowerCase().trim();
     const concept = input.conceptTitle.toLowerCase();
 

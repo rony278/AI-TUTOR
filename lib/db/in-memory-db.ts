@@ -512,22 +512,62 @@ export class DatabaseStore {
   public chunks: MaterialChunk[];
   public knowledgeGraph: KnowledgeGraph;
   public activeLessonState: LessonState | null = null;
+  public lessons: Map<string, LessonState> = new Map();
 
   private constructor() {
     this.studentProfile = { ...defaultStudentProfile };
     this.documents = [...sampleDocuments];
     this.chunks = [...sampleChunks];
     this.knowledgeGraph = JSON.parse(JSON.stringify(physicsKnowledgeGraph));
+
+    // Pre-populate default physics lesson
+    const defaultState: LessonState = {
+      lessonId: "lesson_physics_101",
+      title: physicsLessonPlan.title,
+      studentProfile: { ...this.studentProfile },
+      brainState: "TEACH",
+      knowledgeGraph: JSON.parse(JSON.stringify(this.knowledgeGraph)),
+      lessonPlan: JSON.parse(JSON.stringify(physicsLessonPlan)),
+      currentStepIndex: 0,
+      currentConceptId: physicsLessonPlan.steps[0].conceptId,
+      currentDifficulty: this.studentProfile.level,
+      currentLanguage: this.studentProfile.language,
+      mode: "TEACH",
+      timeRemainingSeconds: 20 * 60,
+      totalElapsedSeconds: 0,
+      isPaused: false,
+      isSpeaking: false,
+      isListening: false,
+      questionsAskedCount: 0,
+      correctAnswersCount: 0,
+      activeMisconceptions: [],
+      resolvedMisconceptions: [],
+      adaptationHistory: [],
+    };
+    this.lessons.set("lesson_physics_101", defaultState);
+    this.activeLessonState = defaultState;
   }
 
   public static getInstance(): DatabaseStore {
-    if (!DatabaseStore.instance) {
-      DatabaseStore.instance = new DatabaseStore();
+    const globalForDb = globalThis as unknown as { __dbStoreInstance?: DatabaseStore };
+    if (!globalForDb.__dbStoreInstance) {
+      globalForDb.__dbStoreInstance = new DatabaseStore();
     }
-    return DatabaseStore.instance;
+    return globalForDb.__dbStoreInstance;
+  }
+
+  public setLessonState(lessonId: string, state: LessonState): void {
+    this.lessons.set(lessonId, state);
+    this.activeLessonState = state;
   }
 
   public getOrCreateLessonState(lessonId: string): LessonState {
+    if (this.lessons.has(lessonId)) {
+      const state = this.lessons.get(lessonId)!;
+      this.activeLessonState = state;
+      return state;
+    }
+
     if (this.activeLessonState && this.activeLessonState.lessonId === lessonId) {
       return this.activeLessonState;
     }
@@ -556,7 +596,9 @@ export class DatabaseStore {
       adaptationHistory: [],
     };
 
+    this.lessons.set(lessonId, state);
     this.activeLessonState = state;
     return state;
   }
 }
+

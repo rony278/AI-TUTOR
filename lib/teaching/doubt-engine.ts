@@ -20,6 +20,8 @@ export interface DoubtResolution {
   audioSpeech: string;
 }
 
+import { GeminiLLMProvider } from "@/providers/llm/gemini-provider";
+
 export class DoubtResolutionEngine {
   /**
    * Evaluates student doubt against what has been taught so far in the lesson
@@ -27,11 +29,11 @@ export class DoubtResolutionEngine {
    * If matched -> provides answer from what was taught.
    * Otherwise -> teacher synthesizes an expert answer and relates it back.
    */
-  public static resolveDoubt(
+  public static async resolveDoubt(
     question: string,
     lessonState: LessonState,
     materialChunks: MaterialChunk[] = []
-  ): DoubtResolution {
+  ): Promise<DoubtResolution> {
     const qLower = question.toLowerCase().trim();
     
     // Stop words to prevent false-positive matching on generic query words
@@ -92,6 +94,71 @@ export class DoubtResolutionEngine {
     const isStepMatched = !!bestStepMatch && bestStepMatch.score >= 4;
     const isChunkMatched = !!bestChunkMatch && bestChunkMatch.score >= 4;
 
+    // Check if Gemini is available for real dynamic synthesis
+    const gemini = new GeminiLLMProvider();
+    if (gemini.hasValidKey()) {
+      try {
+        const stepsTaught = lessonState.lessonPlan.steps
+          .slice(0, currentStepIndex + 1)
+          .map((s, idx) => `Step ${idx + 1}: ${s.title} - ${s.spokenScript.slice(0, 120)}`)
+          .join("\n");
+
+        const prompt = `You are a supportive, insightful AI Teacher.
+Lesson Topic: "${lessonState.lessonPlan.title}"
+Language: "${lessonState.currentLanguage}"
+Steps taught so far:
+${stepsTaught}
+
+Student Question/Doubt: "${question}"
+
+Instructions:
+1. First, determine if this doubt was addressed in the steps taught above.
+2. If it was covered in earlier steps, remind the student gently and explain with reference to what was taught.
+3. If it is a new or forward-looking question, synthesize an expert, clear answer that connects back to the lesson.
+4. Keep the answer warm, pedagogical, and concise (2-4 sentences max).
+
+Respond in JSON format:
+{
+  "isAddressedInLesson": boolean,
+  "answer": string,
+  "pedagogicalTip": string
+}`;
+
+        const aiResponse = await gemini.generateJson<{
+          isAddressedInLesson: boolean;
+          answer: string;
+          pedagogicalTip: string;
+        }>([
+          {
+            role: "user",
+            content: prompt,
+          },
+        ]);
+
+        if (aiResponse && aiResponse.answer) {
+          const matchedStep = bestStepMatch?.step;
+          const sourceType = aiResponse.isAddressedInLesson || isStepMatched ? "LESSON_TEACHINGS" : "TEACHER_EXPERT_SYNTHESIS";
+          return {
+            question,
+            sourceType,
+            matchedStepIndex: bestStepMatch?.stepIndex,
+            matchedStepTitle: matchedStep?.title || (sourceType === "LESSON_TEACHINGS" ? "Earlier Lesson Step" : undefined),
+            matchedDocumentCitation: matchedStep?.sourceCitation ? {
+              docTitle: matchedStep.sourceCitation.docTitle,
+              page: matchedStep.sourceCitation.page,
+              section: matchedStep.sourceCitation.section,
+            } : undefined,
+            groundedQuote: matchedStep?.spokenScript,
+            answer: aiResponse.answer,
+            pedagogicalTip: aiResponse.pedagogicalTip || "Reviewing earlier concepts reinforces long-term retention.",
+            audioSpeech: aiResponse.answer,
+          };
+        }
+      } catch (err) {
+        console.warn("[DoubtResolutionEngine] Gemini doubt resolution failed, using fallback:", err);
+      }
+    }
+
     if (isStepMatched || isChunkMatched) {
       const matchedStep = bestStepMatch?.step;
       const matchedChunk = bestChunkMatch?.chunk;
@@ -140,7 +207,7 @@ export class DoubtResolutionEngine {
       expertAnswer =
         "Haan bilkul! Current electron flow ki speed hai, aur resistance usko rokta hai. Isliye resistance badhne par current hamesha kam hota hai.";
     } else {
-      expertAnswer = `That is an insightful query extending beyond what we covered so far in ${lessonState.lessonPlan.title}. In physics, every system balances input potential against resistive drag. Let's make sure our foundational Ohm's law and Newton mechanics are mastered before diving deeper!`;
+      expertAnswer = `That is an insightful query extending beyond what we covered so far in ${lessonState.lessonPlan.title}. In ${lessonState.lessonPlan.subject || "this subject"}, every system balances driving potential against resistive drag. Let's make sure our foundational principles are mastered before diving deeper!`;
     }
 
     return {
@@ -152,3 +219,4 @@ export class DoubtResolutionEngine {
     };
   }
 }
+
